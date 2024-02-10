@@ -1,7 +1,7 @@
 # BDD100k dataset https://www.kaggle.com/datasets/solesensei/solesensei_bdd100k
 # Example usage: python train.py --data bdd.yaml
 
-path: ../BDDDataset # dataset root dir
+path: BDDDataset # dataset root dir
 train: images/train # train images (relative to 'path') 
 val: images/val # val images (relative to 'path')
 test: images/test # test images (relative to 'path')

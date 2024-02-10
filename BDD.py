@@ -1,7 +1,7 @@
 import numpy as np
 from pathlib import Path
 from torch.utils.data import Dataset
-import tqdm
+from tqdm import tqdm
 
 class BDDDataset(Dataset):
 
@@ -25,15 +25,14 @@ class BDDDataset(Dataset):
 
         print('Loading ' + self.mode + ' dataset...')
         gt_db = []
-        for img_name in tqdm(self.img_dir.iterdir()):
-            img_path = self.img_dir / img_name
-            seg_path = self.seg_dir / img_name
-            det_path = self.det_dir / img_name.replace('.jpg', '.txt')
+        for img_path in tqdm(self.img_dir.iterdir()):
+            seg_path = self.seg_dir / img_path.name
+            det_path = self.det_dir / img_path.name.replace('.jpg', '.txt')
 
             with open(det_path, 'r') as f:
                 labels = f.readlines()
 
-            gt = np.zeros((len(labels), len(labels[0].split())))
+            gt = np.zeros((len(labels), 5))
             for i, label in enumerate(labels):
 
                 label = [float(x) for x in label.split()]
@@ -56,3 +55,16 @@ class BDDDataset(Dataset):
     
     def __len__(self,):
         return len(self.db)
+
+
+if __name__ == "__main__":
+    import yaml
+
+    cfg_path = r'data\bdd.yaml'
+    with open(cfg_path, 'r') as f:
+        cfg = yaml.safe_load(f)
+
+    dataset = BDDDataset(cfg, 'train')
+    print(len(dataset))
+    print(dataset.db[0])
+
