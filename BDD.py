@@ -1,5 +1,7 @@
+import numpy as np
 from pathlib import Path
 from torch.utils.data import Dataset
+import tqdm
 
 class BDDDataset(Dataset):
 
@@ -12,11 +14,45 @@ class BDDDataset(Dataset):
         self.transform = transform
 
         root_dir = Path(cfg['path'])
-        img_dir = root_dir / "images" / mode
-        det_dir = root_dir / "labels" / "det" / mode
-        seg_dir = root_dir / "labels" / "seg" / mode
+        self.img_dir = root_dir / "images" / mode
+        self.det_dir = root_dir / "labels" / "det" / mode
+        self.seg_dir = root_dir / "labels" / "seg" / mode
 
-        self.img_list = list(img_dir.glob("*.jpg"))
-        self.db = []
+        self.db = self._build_database()
 
+    
+    def _build_database(self):
 
+        print('Loading ' + self.mode + ' dataset...')
+        gt_db = []
+        for img_name in tqdm(self.img_dir.iterdir()):
+            img_path = self.img_dir / img_name
+            seg_path = self.seg_dir / img_name
+            det_path = self.det_dir / img_name.replace('.jpg', '.txt')
+
+            with open(det_path, 'r') as f:
+                labels = f.readlines()
+
+            gt = np.zeros((len(labels), len(labels[0].split())))
+            for i, label in enumerate(labels):
+
+                label = [float(x) for x in label.split()]
+
+                assert len(label) == 5, "Invalid label at " + det_path
+
+                gt[i][0] = int(label[0])
+                gt[i][1:] = label[1:]
+                
+            data = {
+                'image': img_path,
+                'label': gt,
+                'mask': seg_path,
+            }
+
+            gt_db.append(data)
+        print('Finished loading ' + self.mode + ' dataset.')
+        return gt_db
+
+    
+    def __len__(self,):
+        return len(self.db)
