@@ -110,6 +110,7 @@ def replicate(im, labels):
 
 def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
     # Resize and pad image while meeting stride-multiple constraints
+
     shape = im.shape[:2]  # current shape [height, width]
     if isinstance(new_shape, int):
         new_shape = (new_shape, new_shape)
@@ -142,11 +143,16 @@ def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleF
 
 
 def random_perspective(
-    im, targets=(), segments=(), degrees=10, translate=0.1, scale=0.1, shear=10, perspective=0.0, border=(0, 0)
+    combination, targets=(), segments=(), degrees=10, translate=0.1, scale=0.1, shear=10, perspective=0.0, border=(0, 0)
 ):
     # torchvision.transforms.RandomAffine(degrees=(-10, 10), translate=(0.1, 0.1), scale=(0.9, 1.1), shear=(-10, 10))
     # targets = [cls, xyxy]
-
+    seg_label = None
+    if len(combination) == 2:
+        im, seg_label = combination
+    else:
+        im = combination
+    
     height = im.shape[0] + border[0] * 2  # shape(h,w,c)
     width = im.shape[1] + border[1] * 2
 
@@ -183,8 +189,10 @@ def random_perspective(
     if (border[0] != 0) or (border[1] != 0) or (M != np.eye(3)).any():  # image changed
         if perspective:
             im = cv2.warpPerspective(im, M, dsize=(width, height), borderValue=(114, 114, 114))
+            seg_label = cv2.warpPerspective(seg_label, M, dsize=(width, height), borderValue=(0, 0, 0))
         else:  # affine
             im = cv2.warpAffine(im, M[:2], dsize=(width, height), borderValue=(114, 114, 114))
+            seg_label = cv2.warpAffine(seg_label, M[:2], dsize=(width, height), borderValue=(0, 0, 0))
 
     # Visualize
     # import matplotlib.pyplot as plt
@@ -227,8 +235,8 @@ def random_perspective(
         i = box_candidates(box1=targets[:, 1:5].T * s, box2=new.T, area_thr=0.01 if use_segments else 0.10)
         targets = targets[i]
         targets[:, 1:5] = new[i]
-
-    return im, targets
+    combination = im if seg_label is None else (im, seg_label)
+    return combination, targets
 
 
 def copy_paste(im, labels, segments, p=0.5):
