@@ -24,6 +24,7 @@ import torchvision
 import yaml
 from PIL import ExifTags, Image, ImageOps
 from torch.utils.data import DataLoader, Dataset, dataloader, distributed
+from BDD import BDDDataset
 from tqdm import tqdm
 
 from utils.augmentations import (
@@ -209,6 +210,40 @@ def create_dataloader(
         generator=generator,
     ), dataset
 
+
+def create_bdd_dataloader(
+    batch_size,
+    hyp=None,
+    rank=-1,
+    workers=8,
+    shuffle=False,
+    seed=0,
+    mode='train',
+):
+    with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
+        dataset = BDDDataset(cfg = hyp, 
+                             mode = mode, 
+                             transform = None
+                             )
+
+    batch_size = min(batch_size, len(dataset))
+    nd = torch.cuda.device_count()  # number of CUDA devices
+    nw = min([os.cpu_count() // max(nd, 1), batch_size if batch_size > 1 else 0, workers])  # number of workers
+    sampler = None# if rank == -1 else SmartDistributedSampler(dataset, shuffle=shuffle)
+    loader = DataLoader #if image_weights else InfiniteDataLoader  # only DataLoader allows for attribute updates
+    generator = torch.Generator()
+    generator.manual_seed(6148914691236517205 + seed + RANK)
+    return loader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle and sampler is None,
+        num_workers=nw,
+        sampler=sampler,
+        pin_memory=PIN_MEMORY,
+        collate_fn=BDDDataset.collate_fn,
+        worker_init_fn=seed_worker,
+        generator=generator,
+    ), dataset
 
 class InfiniteDataLoader(dataloader.DataLoader):
     """
