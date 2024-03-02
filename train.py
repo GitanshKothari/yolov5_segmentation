@@ -50,7 +50,7 @@ from models.yolo import Model
 from utils.autoanchor import check_anchors
 from utils.autobatch import check_train_batch_size
 from utils.callbacks import Callbacks
-from utils.dataloaders import create_dataloader
+from utils.dataloaders import create_dataloader, create_bdd_dataloader
 from utils.downloads import attempt_download, is_url
 from utils.general import (
     LOGGER,
@@ -245,23 +245,33 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         LOGGER.info("Using SyncBatchNorm()")
 
     # Trainloader
-    train_loader, dataset = create_dataloader(
-        train_path,
-        imgsz,
-        batch_size // WORLD_SIZE,
-        gs,
-        single_cls,
-        hyp=hyp,
-        augment=True,
-        cache=None if opt.cache == "val" else opt.cache,
-        rect=opt.rect,
+    # train_loader, dataset = create_dataloader(
+    #     train_path,
+    #     imgsz,
+    #     batch_size // WORLD_SIZE,
+    #     gs,
+    #     single_cls,
+    #     hyp=hyp,
+    #     augment=True,
+    #     cache=None if opt.cache == "val" else opt.cache,
+    #     rect=opt.rect,
+    #     rank=LOCAL_RANK,
+    #     workers=workers,
+    #     image_weights=opt.image_weights,
+    #     quad=opt.quad,
+    #     prefix=colorstr("train: "),
+    #     shuffle=True,
+    #     seed=opt.seed,
+    # )
+        
+    train_loader, dataset = create_bdd_dataloader(
+        batch_size,
+        hyp,
         rank=LOCAL_RANK,
         workers=workers,
-        image_weights=opt.image_weights,
-        quad=opt.quad,
-        prefix=colorstr("train: "),
         shuffle=True,
         seed=opt.seed,
+        mode='train',
     )
     labels = np.concatenate(dataset.labels, 0)
     mlc = int(labels[:, 0].max())  # max label class
@@ -269,19 +279,28 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
     # Process 0
     if RANK in {-1, 0}:
-        val_loader = create_dataloader(
-            val_path,
-            imgsz,
-            batch_size // WORLD_SIZE * 2,
-            gs,
-            single_cls,
-            hyp=hyp,
-            cache=None if noval else opt.cache,
-            rect=True,
+        # val_loader = create_dataloader(
+        #     val_path,
+        #     imgsz,
+        #     batch_size // WORLD_SIZE * 2,
+        #     gs,
+        #     single_cls,
+        #     hyp=hyp,
+        #     cache=None if noval else opt.cache,
+        #     rect=True,
+        #     rank=-1,
+        #     workers=workers * 2,
+        #     pad=0.5,
+        #     prefix=colorstr("val: "),
+        # )[0]
+
+        val_loader = create_bdd_dataloader(
+            batch_size,
+            hyp,
             rank=-1,
-            workers=workers * 2,
-            pad=0.5,
-            prefix=colorstr("val: "),
+            workers=workers,
+            shuffle=False,
+            mode='val',
         )[0]
 
         if not resume:
