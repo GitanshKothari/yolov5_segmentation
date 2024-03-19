@@ -11,7 +11,7 @@ from utils.general import xyxy2xywh
 
 class BDDDataset(Dataset):
 
-    def __init__(self, cfg, mode, transform=None):
+    def __init__(self, cfg, mode, transform=None, imgsz=640):
         
         assert mode in ["train", "val", "test"], "mode must be 'train', 'val' or 'test'"
 
@@ -25,7 +25,7 @@ class BDDDataset(Dataset):
         self.seg_dir = root_dir / "labels" / "seg" / mode
         
         self.db = self._build_database()
-        self.resized_shape = 640
+        self.resized_shape = imgsz
     
     def _build_database(self):
 
@@ -148,9 +148,8 @@ class BDDDataset(Dataset):
         seg_background = np.where(seg_label == 0, 1, 0)
         seg_drivable = np.where(seg_label >= 0, 1, 0)
         
-        seg_label = np.stack([seg_background, seg_drivable], axis=2)
-        seg_label = self.transform(seg_label)
-
+        seg_label = np.stack([seg_background, seg_drivable])
+        seg_label = torch.Tensor(seg_label)
         target = [labels_out, seg_label]
         
         img = self.transform(img)

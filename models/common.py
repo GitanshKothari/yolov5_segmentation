@@ -86,14 +86,15 @@ class SemanticSegmentationOut(nn.Module):
     # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
     default_act = nn.Sigmoid()  # default activation
 
-    def __init__(self, c1, c2, k=1, s=1, act=True):
+    def __init__(self, c1, c2, k=1, s=1, d=1, p=None, act=True):
         super().__init__()
-        self.conv = nn.Conv2d(c1, c2, k, s)
+        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d))
         self.bn = nn.BatchNorm2d(c2)
         self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
 
     def forward(self, x):
-        return self.act(self.bn(self.conv(x)))
+        out = self.act(self.bn(self.conv(x)))
+        return out
 
     def forward_fuse(self, x):
         return self.act(self.conv(x))

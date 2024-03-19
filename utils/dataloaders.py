@@ -214,6 +214,7 @@ def create_dataloader(
 def create_bdd_dataloader(
     batch_size,
     hyp=None,
+    imgsz=640,
     rank=-1,
     workers=8,
     shuffle=False,
@@ -223,7 +224,8 @@ def create_bdd_dataloader(
     with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
         dataset = BDDDataset(cfg = hyp, 
                              mode = mode, 
-                             transform = None
+                             transform = None, 
+                             imgsz=imgsz,
                              )
 
     batch_size = min(batch_size, len(dataset))

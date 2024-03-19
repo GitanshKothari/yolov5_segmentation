@@ -38,7 +38,7 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 from models.common import DetectMultiBackend
 from utils.callbacks import Callbacks
-from utils.dataloaders import create_dataloader
+from utils.dataloaders import create_dataloader, create_bdd_dataloader
 from utils.general import (
     LOGGER,
     TQDM_BAR_FORMAT,
@@ -192,16 +192,25 @@ def run(
         model.warmup(imgsz=(1 if pt else batch_size, 3, imgsz, imgsz))  # warmup
         pad, rect = (0.0, False) if task == "speed" else (0.5, pt)  # square inference for benchmarks
         task = task if task in ("train", "val", "test") else "val"  # path to train/val/test images
-        dataloader = create_dataloader(
-            data[task],
-            imgsz,
+        # dataloader = create_dataloader(
+        #     data[task],
+        #     imgsz,
+        #     batch_size,
+        #     stride,
+        #     single_cls,
+        #     pad=pad,
+        #     rect=rect,
+        #     workers=workers,
+        #     prefix=colorstr(f"{task}: "),
+        # )[0]
+
+        dataloader = create_bdd_dataloader(
             batch_size,
-            stride,
-            single_cls,
-            pad=pad,
-            rect=rect,
+            data,
+            rank=-1,
             workers=workers,
-            prefix=colorstr(f"{task}: "),
+            shuffle=False,
+            mode='val',
         )[0]
 
     seen = 0
@@ -213,31 +222,37 @@ def run(
     s = ("%22s" + "%11s" * 6) % ("Class", "Images", "Instances", "P", "R", "mAP50", "mAP50-95")
     tp, fp, p, r, f1, mp, mr, map50, ap50, map = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     dt = Profile(device=device), Profile(device=device), Profile(device=device)  # profiling times
-    loss = torch.zeros(3, device=device)
+    loss = torch.zeros(4, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
     callbacks.run("on_val_start")
+
+    seg_criterion = torch.nn.BCEWithLogitsLoss()
+    seg_loss = torch.zeros(1, device=device)
     pbar = tqdm(dataloader, desc=s, bar_format=TQDM_BAR_FORMAT)  # progress bar
     for batch_i, (im, targets, paths, shapes) in enumerate(pbar):
         callbacks.run("on_val_batch_start")
+        targets_det, targets_seg = targets
         with dt[0]:
             if cuda:
                 im = im.to(device, non_blocking=True)
-                targets = targets.to(device)
+                targets_det = targets_det.to(device)
+                targets_seg = targets_seg.to(device)
             im = im.half() if half else im.float()  # uint8 to fp16/32
             im /= 255  # 0 - 255 to 0.0 - 1.0
             nb, _, height, width = im.shape  # batch size, channels, height, width
 
         # Inference
         with dt[1]:
-            preds, train_out = model(im) if compute_loss else (model(im, augment=augment), None)
+            (preds, train_out), seg_out = model(im) if compute_loss else (model(im, augment=augment), None)
 
         # Loss
         if compute_loss:
-            loss += compute_loss(train_out, targets)[1]  # box, obj, cls
-
+            loss[:-1] += compute_loss(train_out, targets_det)[1]  # box, obj, cls
+            loss[-1] += seg_criterion(seg_out.view(-1), targets_seg.float().view(-1))  # seg loss
+        
         # NMS
-        targets[:, 2:] *= torch.tensor((width, height, width, height), device=device)  # to pixels
-        lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)] if save_hybrid else []  # for autolabelling
+        targets_det[:, 2:] *= torch.tensor((width, height, width, height), device=device)  # to pixels
+        lb = [targets_det[targets_det[:, 0] == i, 1:] for i in range(nb)] if save_hybrid else []  # for autolabelling
         with dt[2]:
             preds = non_max_suppression(
                 preds, conf_thres, iou_thres, labels=lb, multi_label=True, agnostic=single_cls, max_det=max_det
@@ -245,7 +260,7 @@ def run(
 
         # Metrics
         for si, pred in enumerate(preds):
-            labels = targets[targets[:, 0] == si, 1:]
+            labels = targets_det[targets_det[:, 0] == si, 1:]
             nl, npr = labels.shape[0], pred.shape[0]  # number of labels, predictions
             path, shape = Path(paths[si]), shapes[si][0]
             correct = torch.zeros(npr, niou, dtype=torch.bool, device=device)  # init
@@ -284,10 +299,10 @@ def run(
 
         # Plot images
         if plots and batch_i < 3:
-            plot_images(im, targets, paths, save_dir / f"val_batch{batch_i}_labels.jpg", names)  # labels
+            plot_images(im, targets_det, paths, save_dir / f"val_batch{batch_i}_labels.jpg", names)  # labels
             plot_images(im, output_to_target(preds), paths, save_dir / f"val_batch{batch_i}_pred.jpg", names)  # pred
 
-        callbacks.run("on_val_batch_end", batch_i, im, targets, paths, shapes, preds)
+        callbacks.run("on_val_batch_end", batch_i, im, targets_det, paths, shapes, preds)
 
     # Compute metrics
     stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*stats)]  # to numpy
