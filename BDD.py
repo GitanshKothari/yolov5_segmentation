@@ -19,19 +19,19 @@ class BDDDataset(Dataset):
         self.cfg = cfg
         self.transform = transform if transform else T.Compose([T.ToTensor()])
         self.is_train = mode == "train"
-
         root_dir = Path(cfg['path'])
         self.img_dir = root_dir / "images" / mode
         self.det_dir = root_dir / "labels" / "det" / mode
         self.seg_dir = root_dir / "labels" / "seg" / mode
         
         self.db = self._build_database()
-        self.resized_shape = (640, 640)
+        self.resized_shape = 640
     
     def _build_database(self):
 
         print('Loading ' + self.mode + ' dataset...')
         gt_db = []
+        self.labels = []
         for img_path in tqdm(self.img_dir.iterdir()):
             seg_path = self.seg_dir / img_path.name
             det_path = self.det_dir / img_path.name.replace('.jpg', '.txt')
@@ -48,7 +48,7 @@ class BDDDataset(Dataset):
 
                 gt[i][0] = int(label[0])
                 gt[i][1:] = label[1:]
-                
+            self.labels.append(gt)
             data = {
                 'image': img_path,
                 'label': gt,
@@ -69,8 +69,6 @@ class BDDDataset(Dataset):
         img = cv2.imread(data["image"], cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         seg_label = cv2.imread(data["mask"], 0)
-
-        
         if isinstance(self.resized_shape, list):
             self.resized_shape = max(self.resized_shape)
         h0, w0 = img.shape[:2]  # orig hw
@@ -119,7 +117,6 @@ class BDDDataset(Dataset):
             if lr_flip and random.random() < 0.5:
                 img = np.fliplr(img)
                 seg_label = np.fliplr(seg_label)
-                lane_label = np.fliplr(lane_label)
                 if len(labels):
                     labels[:, 1] = 1 - labels[:, 1]
 
@@ -128,7 +125,6 @@ class BDDDataset(Dataset):
             if ud_flip and random.random() < 0.5:
                 img = np.flipud(img)
                 seg_label = np.filpud(seg_label)
-                lane_label = np.filpud(lane_label)
                 if len(labels):
                     labels[:, 2] = 1 - labels[:, 2]
         
@@ -145,15 +141,14 @@ class BDDDataset(Dataset):
         if len(labels):
             labels_out[:, 1:] = torch.from_numpy(labels)
         # Convert
-        img = img.transpose(2, 0, 1) # HWC to CHW
+        
         img = np.ascontiguousarray(img)
+
 
         seg_background = np.where(seg_label == 0, 1, 0)
         seg_drivable = np.where(seg_label >= 0, 1, 0)
         
         seg_label = np.stack([seg_background, seg_drivable], axis=2)
-        seg_label = seg_label.transpose(2, 0, 1)
-        seg_label = seg_label
         seg_label = self.transform(seg_label)
 
         target = [labels_out, seg_label]

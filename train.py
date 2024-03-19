@@ -266,7 +266,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         
     train_loader, dataset = create_bdd_dataloader(
         batch_size,
-        hyp,
+        data_dict,
         rank=LOCAL_RANK,
         workers=workers,
         shuffle=True,
@@ -296,7 +296,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
         val_loader = create_bdd_dataloader(
             batch_size,
-            hyp,
+            data_dict,
             rank=-1,
             workers=workers,
             shuffle=False,
@@ -526,8 +526,8 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 def parse_opt(known=False):
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", type=str, default=ROOT / "yolov5s.pt", help="initial weights path")
-    parser.add_argument("--cfg", type=str, default="", help="model.yaml path")
-    parser.add_argument("--data", type=str, default=ROOT / "data/coco128.yaml", help="dataset.yaml path")
+    parser.add_argument("--cfg", type=str, default=ROOT / "yolov5s.yaml", help="model.yaml path")
+    parser.add_argument("--data", type=str, default=ROOT / "data/bdd.yaml", help="dataset.yaml path")
     parser.add_argument("--hyp", type=str, default=ROOT / "data/hyps/hyp.scratch-low.yaml", help="hyperparameters path")
     parser.add_argument("--epochs", type=int, default=100, help="total training epochs")
     parser.add_argument("--batch-size", type=int, default=16, help="total batch size for all GPUs, -1 for autobatch")

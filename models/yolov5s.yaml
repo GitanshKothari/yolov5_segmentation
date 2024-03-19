@@ -1,7 +1,7 @@
 # YOLOv5 🚀 by Ultralytics, AGPL-3.0 license
 
 # Parameters
-nc: 80 # number of classes
+nc: 10 # number of classes
 depth_multiple: 0.33 # model depth multiple
 width_multiple: 0.50 # layer channel multiple
 anchors:
@@ -45,15 +45,15 @@ head: [
     [[-1, 10], 1, Concat, [1]], # cat head P5
     [-1, 3, C3, [1024, False]], # 23 (P5/32-large)
 
-    [ 16, Conv, [128, 3, 1]],   #24
-    [ -1, nn.Upsample, [None, 2, 'nearest']],  #25
-    [ -1, C3, [64, False]],  #26
-    [ -1, Conv, [32, 3, 1]],    #27
-    [ -1, nn.Upsample, [None, 2, 'nearest']],  #28
-    [ -1, Conv, [16, 3, 1]],    #29
-    [ -1, C3, [8, False]],    #30
-    [ -1, nn.Upsample, [None, 2, 'nearest']],  #31
-    [ -1, SemanticSegmentationOut, [2, 3, 1]], #32 Driving area segmentation head
+    [ 16, 1, Conv, [128, 3, 1]],   #24
+    [ -1, 1, nn.Upsample, [None, 2, 'nearest']],  #25
+    [ -1, 3, C3, [64, False]],  #26
+    [ -1, 1, Conv, [32, 3, 1]],    #27
+    [ -1, 1, nn.Upsample, [None, 2, 'nearest']],  #28
+    [ -1, 1, Conv, [16, 3, 1]],    #29
+    [ -1, 3, C3, [8, False]],    #30
+    [ -1, 1, nn.Upsample, [None, 2, 'nearest']],  #31
+    [ -1, 1, SemanticSegmentationOut, [2, 3, 1]], #32 Driving area segmentation head
 
     [[17, 20, 23], 1, Detect, [nc, anchors]], # Detect(P3, P4, P5)
   ]
